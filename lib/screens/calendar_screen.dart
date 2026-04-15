@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
-import '../l10n/app_localizations.dart';
 import '../widgets/calendar_widget.dart';
 import 'document_screen.dart';
 

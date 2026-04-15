@@ -18,14 +18,28 @@ class DatabaseHelper {
     return _database!;
   }
 
+  static const int _schemaVersion = 2;
+
   Future<Database> _initDB(String fileName) async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, fileName);
     return await openDatabase(
       path,
-      version: 1,
+      version: _schemaVersion,
+      onConfigure: (db) async {
+        // Required for ON DELETE CASCADE to be honored.
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    // Migrations run sequentially. Add new cases for each schema bump.
+    if (oldVersion < 2) {
+      // v2: no schema change, just establishes the migration path.
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -127,9 +141,31 @@ class DatabaseHelper {
     return results.map((m) => DiaryEntry.fromMap(m)).toList();
   }
 
+  /// Returns all entries (newest first) paired with their todos, using two
+  /// queries instead of N+1. Entries with no todos map to an empty list.
+  Future<({List<DiaryEntry> entries, Map<int, List<TodoItem>> todosByEntry})>
+      getAllEntriesWithTodos() async {
+    final db = await database;
+    final entryRows = await db.query('diary_entries', orderBy: 'date DESC');
+    final entries = entryRows.map((m) => DiaryEntry.fromMap(m)).toList();
+
+    final todoRows = await db.query(
+      'todo_items',
+      orderBy: 'entry_id ASC, sort_order ASC, id ASC',
+    );
+    final Map<int, List<TodoItem>> grouped = {
+      for (final e in entries) e.id!: <TodoItem>[],
+    };
+    for (final row in todoRows) {
+      final entryId = row['entry_id'] as int;
+      (grouped[entryId] ??= <TodoItem>[]).add(TodoItem.fromMap(row));
+    }
+    return (entries: entries, todosByEntry: grouped);
+  }
+
   Future<void> deleteEntry(int entryId) async {
     final db = await database;
-    await db.delete('todo_items', where: 'entry_id = ?', whereArgs: [entryId]);
+    // Child rows removed via ON DELETE CASCADE.
     await db.delete('diary_entries', where: 'id = ?', whereArgs: [entryId]);
   }
 
@@ -258,30 +294,28 @@ class DatabaseHelper {
   Future<String> exportToJson() async {
     final db = await database;
     final entries = await db.query('diary_entries', orderBy: 'date ASC');
-    final List<Map<String, dynamic>> exportData = [];
+    final todoRows = await db.query(
+      'todo_items',
+      orderBy: 'entry_id ASC, sort_order ASC',
+    );
 
-    for (final entry in entries) {
-      final todos = await db.query(
-        'todo_items',
-        where: 'entry_id = ?',
-        whereArgs: [entry['id']],
-        orderBy: 'sort_order ASC',
-      );
-      exportData.add({
-        'date': entry['date'],
-        'text_content': entry['text_content'],
-        'created_at': entry['created_at'],
-        'updated_at': entry['updated_at'],
-        'todos': todos
-            .map((t) => {
-                  'content': t['content'],
-                  'status': t['status'],
-                  'sort_order': t['sort_order'],
-                  'created_at': t['created_at'],
-                })
-            .toList(),
+    final Map<int, List<Map<String, dynamic>>> todosByEntry = {};
+    for (final t in todoRows) {
+      (todosByEntry[t['entry_id'] as int] ??= []).add({
+        'content': t['content'],
+        'status': t['status'],
+        'sort_order': t['sort_order'],
+        'created_at': t['created_at'],
       });
     }
+
+    final exportData = entries.map((entry) => {
+          'date': entry['date'],
+          'text_content': entry['text_content'],
+          'created_at': entry['created_at'],
+          'updated_at': entry['updated_at'],
+          'todos': todosByEntry[entry['id'] as int] ?? const [],
+        }).toList();
 
     return const JsonEncoder.withIndent('  ').convert({
       'app': 'diary_app',
@@ -307,58 +341,58 @@ class DatabaseHelper {
     }
     final entries = data['entries'] as List<dynamic>;
     final db = await database;
-    int count = 0;
 
-    for (final entryData in entries) {
-      final date = entryData['date'] as String;
-      // Check if entry already exists
-      final existing = await db.query(
-        'diary_entries',
-        where: 'date = ?',
-        whereArgs: [date],
-      );
-
-      int entryId;
-      if (existing.isNotEmpty) {
-        entryId = existing.first['id'] as int;
-        await db.update(
+    return await db.transaction<int>((txn) async {
+      int count = 0;
+      for (final entryData in entries) {
+        final date = entryData['date'] as String;
+        final existing = await txn.query(
           'diary_entries',
-          {
+          where: 'date = ?',
+          whereArgs: [date],
+        );
+
+        int entryId;
+        if (existing.isNotEmpty) {
+          entryId = existing.first['id'] as int;
+          await txn.update(
+            'diary_entries',
+            {
+              'text_content': entryData['text_content'] ?? '',
+              'updated_at': entryData['updated_at'] ??
+                  DateTime.now().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [entryId],
+          );
+          await txn.delete('todo_items',
+              where: 'entry_id = ?', whereArgs: [entryId]);
+        } else {
+          entryId = await txn.insert('diary_entries', {
+            'date': date,
             'text_content': entryData['text_content'] ?? '',
+            'created_at': entryData['created_at'] ??
+                DateTime.now().toIso8601String(),
             'updated_at': entryData['updated_at'] ??
                 DateTime.now().toIso8601String(),
-          },
-          where: 'id = ?',
-          whereArgs: [entryId],
-        );
-        // Delete old todos for this entry
-        await db.delete('todo_items',
-            where: 'entry_id = ?', whereArgs: [entryId]);
-      } else {
-        entryId = await db.insert('diary_entries', {
-          'date': date,
-          'text_content': entryData['text_content'] ?? '',
-          'created_at': entryData['created_at'] ??
-              DateTime.now().toIso8601String(),
-          'updated_at': entryData['updated_at'] ??
-              DateTime.now().toIso8601String(),
-        });
-      }
+          });
+        }
 
-      final todos = entryData['todos'] as List<dynamic>? ?? [];
-      for (final todoData in todos) {
-        await db.insert('todo_items', {
-          'entry_id': entryId,
-          'content': todoData['content'] ?? '',
-          'status': todoData['status'] ?? 0,
-          'sort_order': todoData['sort_order'] ?? 0,
-          'created_at': todoData['created_at'] ??
-              DateTime.now().toIso8601String(),
-        });
+        final todos = entryData['todos'] as List<dynamic>? ?? [];
+        for (final todoData in todos) {
+          await txn.insert('todo_items', {
+            'entry_id': entryId,
+            'content': todoData['content'] ?? '',
+            'status': todoData['status'] ?? 0,
+            'sort_order': todoData['sort_order'] ?? 0,
+            'created_at': todoData['created_at'] ??
+                DateTime.now().toIso8601String(),
+          });
+        }
+        count++;
       }
-      count++;
-    }
-    return count;
+      return count;
+    });
   }
 
   Future<int> importFromFile(File file) async {

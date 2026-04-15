@@ -1,30 +1,72 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:diary_app/main.dart';
+import 'package:diary_app/models/todo_item.dart';
+import 'package:diary_app/models/diary_entry.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('TodoStatus', () {
+    test('fromValue maps known values', () {
+      expect(TodoStatus.fromValue(0), TodoStatus.incomplete);
+      expect(TodoStatus.fromValue(1), TodoStatus.completed);
+      expect(TodoStatus.fromValue(2), TodoStatus.excellent);
+      expect(TodoStatus.fromValue(3), TodoStatus.cancelled);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('fromValue defaults unknown to incomplete', () {
+      expect(TodoStatus.fromValue(99), TodoStatus.incomplete);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('next cycles through all states', () {
+      expect(TodoStatus.incomplete.next(), TodoStatus.completed);
+      expect(TodoStatus.completed.next(), TodoStatus.excellent);
+      expect(TodoStatus.excellent.next(), TodoStatus.cancelled);
+      expect(TodoStatus.cancelled.next(), TodoStatus.incomplete);
+    });
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  group('TodoItem.fromMap', () {
+    test('round-trips through toMap', () {
+      final t = TodoItem(
+        id: 7,
+        entryId: 3,
+        content: 'buy milk',
+        status: TodoStatus.completed,
+        sortOrder: 2,
+        createdAt: DateTime.parse('2025-01-02T03:04:05.000'),
+      );
+      final roundTripped = TodoItem.fromMap(t.toMap());
+      expect(roundTripped.id, 7);
+      expect(roundTripped.entryId, 3);
+      expect(roundTripped.content, 'buy milk');
+      expect(roundTripped.status, TodoStatus.completed);
+      expect(roundTripped.sortOrder, 2);
+      expect(roundTripped.createdAt, t.createdAt);
+    });
+  });
+
+  group('DiaryEntry.fromMap', () {
+    test('parses required fields', () {
+      final e = DiaryEntry.fromMap({
+        'id': 1,
+        'date': '2025-06-15',
+        'text_content': 'hello',
+        'created_at': '2025-06-15T10:00:00.000',
+        'updated_at': '2025-06-15T11:00:00.000',
+      });
+      expect(e.id, 1);
+      expect(e.date, '2025-06-15');
+      expect(e.textContent, 'hello');
+    });
+
+    test('tolerates null text_content', () {
+      final e = DiaryEntry.fromMap({
+        'id': 1,
+        'date': '2025-06-15',
+        'text_content': null,
+        'created_at': '2025-06-15T10:00:00.000',
+        'updated_at': '2025-06-15T11:00:00.000',
+      });
+      expect(e.textContent, '');
+    });
   });
 }

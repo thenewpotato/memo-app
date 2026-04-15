@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
 import '../models/diary_entry.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_formatter.dart';
 import 'document_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -26,14 +27,6 @@ class _SearchScreenState extends State<SearchScreen> {
       _results = results;
       _hasSearched = true;
     });
-  }
-
-  String _formatDate(String dateStr, AppLocalizations loc) {
-    final parts = dateStr.split('-');
-    final dt = DateTime(
-        int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    final monthName = loc.monthNames[dt.month - 1];
-    return '${dt.day} $monthName ${dt.year}';
   }
 
   @override
@@ -81,7 +74,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 final entry = _results[index];
                 return ListTile(
                   title: Text(
-                    _formatDate(entry.date, loc),
+                    formatEntryDate(entry.date, loc),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   subtitle: entry.textContent.isNotEmpty

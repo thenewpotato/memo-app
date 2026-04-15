@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
-import '../models/todo_item.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_formatter.dart';
 import 'document_screen.dart';
 
 class FilterScreen extends StatefulWidget {
@@ -40,14 +40,6 @@ class _FilterScreenState extends State<FilterScreen> {
         _loading = false;
       });
     }
-  }
-
-  String _formatDate(String dateStr, AppLocalizations loc) {
-    final parts = dateStr.split('-');
-    final dt = DateTime(
-        int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    final monthName = loc.monthNames[dt.month - 1];
-    return '${dt.day} $monthName ${dt.year}';
   }
 
   @override
@@ -166,7 +158,7 @@ class _FilterScreenState extends State<FilterScreen> {
                             ),
                             title: Text(content),
                             subtitle: Text(
-                              _formatDate(date, loc),
+                              formatEntryDate(date, loc),
                               style: theme.textTheme.bodySmall,
                             ),
                             trailing: const Icon(Icons.chevron_right),

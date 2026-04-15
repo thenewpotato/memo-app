@@ -3,6 +3,7 @@ import '../db/database_helper.dart';
 import '../models/diary_entry.dart';
 import '../models/todo_item.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_formatter.dart';
 import 'document_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
@@ -26,16 +27,12 @@ class TaskListScreenState extends State<TaskListScreen> {
   }
 
   Future<void> refresh() async {
-    final entries = await _db.getAllEntries();
-    final Map<int, List<TodoItem>> todosMap = {};
-    for (final entry in entries) {
-      todosMap[entry.id!] = await _db.getTodosForEntry(entry.id!);
-    }
+    final bundle = await _db.getAllEntriesWithTodos();
     final incomplete = await _db.getDatesWithIncompleteTodos();
     if (mounted) {
       setState(() {
-        _entries = entries;
-        _todosByEntry = todosMap;
+        _entries = bundle.entries;
+        _todosByEntry = bundle.todosByEntry;
         _datesWithIncompleteTodos = incomplete;
         _loading = false;
       });
@@ -50,14 +47,6 @@ class TaskListScreenState extends State<TaskListScreen> {
       ),
     );
     refresh();
-  }
-
-  String _formatDate(String dateStr, AppLocalizations loc) {
-    final parts = dateStr.split('-');
-    final dt = DateTime(
-        int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    final monthName = loc.monthNames[dt.month - 1];
-    return '${dt.day} $monthName ${dt.year}';
   }
 
   bool _entryHasContent(DiaryEntry entry) {
@@ -136,7 +125,7 @@ class TaskListScreenState extends State<TaskListScreen> {
                           ),
                         Expanded(
                           child: Text(
-                            _formatDate(entry.date, loc),
+                            formatEntryDate(entry.date, loc),
                             style:
                                 theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,

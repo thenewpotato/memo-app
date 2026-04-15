@@ -3,6 +3,7 @@ import '../db/database_helper.dart';
 import '../models/diary_entry.dart';
 import '../models/todo_item.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/date_formatter.dart';
 import '../widgets/todo_item_widget.dart';
 
 class DocumentScreen extends StatefulWidget {
@@ -56,10 +57,13 @@ class _DocumentScreenState extends State<DocumentScreen> {
   }
 
   Future<void> _saveTextIfDirty() async {
-    if (_textDirty && _entry != null) {
-      await _db.updateEntryText(_entry!.id!, _textController.text);
-      _textDirty = false;
-    }
+    if (!_textDirty || _entry == null) return;
+    // Capture values synchronously so the save can safely outlive this
+    // State being disposed (e.g. when called from dispose()).
+    final entryId = _entry!.id!;
+    final text = _textController.text;
+    _textDirty = false;
+    await _db.updateEntryText(entryId, text);
   }
 
   Future<void> _addTodo() async {
@@ -147,14 +151,8 @@ class _DocumentScreenState extends State<DocumentScreen> {
     }
   }
 
-  String _formatDateHeader() {
-    final parts = widget.date.split('-');
-    final dt = DateTime(
-        int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    final loc = AppLocalizations.of(context);
-    final monthName = loc.monthNames[dt.month - 1];
-    return '${dt.day} $monthName ${dt.year}';
-  }
+  String _formatDateHeader() =>
+      formatEntryDate(widget.date, AppLocalizations.of(context));
 
   Future<void> _deleteEntry() async {
     final loc = AppLocalizations.of(context);
@@ -291,12 +289,6 @@ class _DocumentScreenState extends State<DocumentScreen> {
                   );
                 },
                 onDelete: () => _deleteTodo(index),
-                onContentChanged: (content) async {
-                  await _db.updateTodoContent(todo.id!, content);
-                  setState(() {
-                    _todos[index] = todo.copyWith(content: content);
-                  });
-                },
               );
             }),
 

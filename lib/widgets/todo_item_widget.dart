@@ -7,7 +7,6 @@ class TodoItemWidget extends StatelessWidget {
   final VoidCallback onTapStatus;
   final VoidCallback onLongPress;
   final VoidCallback onDelete;
-  final ValueChanged<String> onContentChanged;
 
   const TodoItemWidget({
     super.key,
@@ -15,7 +14,6 @@ class TodoItemWidget extends StatelessWidget {
     required this.onTapStatus,
     required this.onLongPress,
     required this.onDelete,
-    required this.onContentChanged,
   });
 
   IconData _statusIcon(TodoStatus status) {
