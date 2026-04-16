@@ -18,7 +18,9 @@ class DatabaseHelper {
     return _database!;
   }
 
-  static const int _schemaVersion = 2;
+  // Bumps to this require: (a) extending onCreate to the new shape and
+  // (b) adding a migration in _upgradeDB.
+  static const int _schemaVersion = 1;
 
   Future<Database> _initDB(String fileName) async {
     final dbPath = await getDatabasesPath();
@@ -36,10 +38,7 @@ class DatabaseHelper {
   }
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    // Migrations run sequentially. Add new cases for each schema bump.
-    if (oldVersion < 2) {
-      // v2: no schema change, just establishes the migration path.
-    }
+    // No migrations yet. Add sequential branches here when bumping schema.
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -332,6 +331,38 @@ class DatabaseHelper {
     final file = File(p.join(dir.path, 'diary_backup_$timestamp.json'));
     await file.writeAsString(json);
     return file;
+  }
+
+  /// Parses the backup JSON and reports how many entries would be newly added
+  /// vs. how many would overwrite an existing same-date entry.
+  /// Throws on invalid backup format — same rules as [importFromJson].
+  Future<({int toAdd, int toOverwrite, List<String> overwriteDates})>
+      previewImport(String jsonStr) async {
+    final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+    if (data['app'] != 'diary_app') {
+      throw Exception('Invalid backup file');
+    }
+    final entries = data['entries'] as List<dynamic>;
+    final dates = entries.map((e) => e['date'] as String).toList();
+    if (dates.isEmpty) {
+      return (toAdd: 0, toOverwrite: 0, overwriteDates: <String>[]);
+    }
+    final db = await database;
+    final existing = await db.query(
+      'diary_entries',
+      columns: ['date'],
+      where: 'date IN (${List.filled(dates.length, '?').join(',')})',
+      whereArgs: dates,
+    );
+    final existingDates =
+        existing.map((r) => r['date'] as String).toSet();
+    final overwriteDates = dates.where(existingDates.contains).toList()
+      ..sort();
+    return (
+      toAdd: dates.length - overwriteDates.length,
+      toOverwrite: overwriteDates.length,
+      overwriteDates: overwriteDates,
+    );
   }
 
   Future<int> importFromJson(String jsonStr) async {

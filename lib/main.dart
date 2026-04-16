@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
@@ -7,10 +8,48 @@ import 'screens/document_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/filter_screen.dart';
 import 'screens/backup_screen.dart';
+import 'services/downloads.dart';
+import 'services/updater.dart';
+import 'widgets/update_dialog.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const DiaryApp());
+  runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // Any uncaught Flutter-framework error lands here.
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      _logCrash(details.exceptionAsString(), details.stack);
+    };
+
+    // Fire-and-forget — don't block app launch on FS cleanup.
+    unawaited(UpdateService.cleanupStaleApks());
+    runApp(const DiaryApp());
+  }, (error, stack) {
+    // Anything asynchronous that escaped all other handlers lands here.
+    _logCrash(error.toString(), stack);
+  });
+}
+
+Future<void> _logCrash(String message, StackTrace? stack) async {
+  try {
+    final now = DateTime.now();
+    final ts = now.toIso8601String().replaceAll(':', '-');
+    final body = [
+      'Time: ${now.toIso8601String()}',
+      'Message: $message',
+      'Stack:',
+      stack?.toString() ?? '(no stack)',
+      '',
+    ].join('\n');
+    await Downloads.saveTextSafe(
+      filename: 'memo_crash_$ts.log',
+      content: body,
+      mime: 'text/plain',
+    );
+  } catch (_) {
+    // Never let the crash logger itself crash.
+  }
 }
 
 class DiaryApp extends StatelessWidget {
@@ -80,10 +119,33 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final _calendarKey = GlobalKey<CalendarScreenState>();
   final _taskListKey = GlobalKey<TaskListScreenState>();
+  UpdateInfo? _pendingUpdate;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForUpdateSilent();
+  }
+
+  Future<void> _checkForUpdateSilent() async {
+    final info = await UpdateService.checkForUpdate();
+    if (!mounted || info == null) return;
+    setState(() => _pendingUpdate = info);
+  }
 
   void _refreshAll() {
     _calendarKey.currentState?.refresh();
     _taskListKey.currentState?.refresh();
+  }
+
+  Future<void> _runUpdate(UpdateInfo info) async {
+    await showUpdateDownloadDialog(context, info);
+    if (mounted) setState(() => _pendingUpdate = null);
+  }
+
+  Future<void> _skipUpdate(UpdateInfo info) async {
+    await UpdateService.skipBuild(info.buildNumber);
+    if (mounted) setState(() => _pendingUpdate = null);
   }
 
   String _todayKey() {
@@ -165,9 +227,23 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
+      body: Column(
+        children: [
+          if (_pendingUpdate != null)
+            UpdateBanner(
+              info: _pendingUpdate!,
+              onUpdate: () => _runUpdate(_pendingUpdate!),
+              onSkip: () => _skipUpdate(_pendingUpdate!),
+              onDismiss: () =>
+                  setState(() => _pendingUpdate = null),
+            ),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: screens,
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openToday,

@@ -72,6 +72,22 @@ class AppLocalizations {
       'undo': 'Undo',
       'year': 'Year',
       'month': 'Month',
+      'updateAvailable': 'Update available:',
+      'updateNow': 'Update',
+      'skip': 'Skip',
+      'close': 'Close',
+      'updateDownloading': 'Downloading',
+      'updatePreparing': 'Preparing...',
+      'updateFailed': 'Update failed',
+      'checkForUpdates': 'Check for updates',
+      'checkingForUpdates': 'Checking...',
+      'upToDate': 'You\'re on the latest version',
+      'importConfirmTitle': 'Confirm import',
+      'importConfirmAdd': '{count} new entries will be added.',
+      'importConfirmOverwrite': '{count} existing entries will be overwritten.',
+      'importConfirmWarning':
+          'Overwrites replace text and delete todos for those dates. This cannot be undone.',
+      'exportSavedToDownloads': 'Backup saved to Downloads folder',
     },
     'zh': {
       'appName': '记事薄',
@@ -130,6 +146,21 @@ class AppLocalizations {
       'undo': '撤销',
       'year': '年',
       'month': '月',
+      'updateAvailable': '有可用更新：',
+      'updateNow': '更新',
+      'skip': '跳过',
+      'close': '关闭',
+      'updateDownloading': '正在下载',
+      'updatePreparing': '准备中…',
+      'updateFailed': '更新失败',
+      'checkForUpdates': '检查更新',
+      'checkingForUpdates': '正在检查…',
+      'upToDate': '已是最新版本',
+      'importConfirmTitle': '确认导入',
+      'importConfirmAdd': '将新增 {count} 条记录。',
+      'importConfirmOverwrite': '将覆盖 {count} 条现有记录。',
+      'importConfirmWarning': '覆盖将替换这些日期的文字并删除其所有待办事项，此操作无法撤销。',
+      'exportSavedToDownloads': '备份已保存到下载文件夹',
     },
   };
 
@@ -196,9 +227,27 @@ class AppLocalizations {
   String get undo => get('undo');
   String get year => get('year');
   String get month => get('month');
+  String get updateAvailable => get('updateAvailable');
+  String get updateNow => get('updateNow');
+  String get skip => get('skip');
+  String get close => get('close');
+  String get updateDownloading => get('updateDownloading');
+  String get updatePreparing => get('updatePreparing');
+  String get updateFailed => get('updateFailed');
+  String get checkForUpdates => get('checkForUpdates');
+  String get checkingForUpdates => get('checkingForUpdates');
+  String get upToDate => get('upToDate');
 
   String importSuccess(int count) =>
       getWithArgs('importSuccess', {'count': count.toString()});
+
+  String get exportSavedToDownloads => get('exportSavedToDownloads');
+  String get importConfirmTitle => get('importConfirmTitle');
+  String get importConfirmWarning => get('importConfirmWarning');
+  String importConfirmAdd(int count) =>
+      getWithArgs('importConfirmAdd', {'count': count.toString()});
+  String importConfirmOverwrite(int count) =>
+      getWithArgs('importConfirmOverwrite', {'count': count.toString()});
 }
 
 class _AppLocalizationsDelegate

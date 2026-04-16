@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
 import '../models/diary_entry.dart';
@@ -15,7 +16,8 @@ class DocumentScreen extends StatefulWidget {
   State<DocumentScreen> createState() => _DocumentScreenState();
 }
 
-class _DocumentScreenState extends State<DocumentScreen> {
+class _DocumentScreenState extends State<DocumentScreen>
+    with WidgetsBindingObserver {
   final _db = DatabaseHelper.instance;
   final _textController = TextEditingController();
   final _todoInputController = TextEditingController();
@@ -26,21 +28,37 @@ class _DocumentScreenState extends State<DocumentScreen> {
   List<TodoItem> _todos = [];
   bool _loading = true;
   bool _textDirty = false;
+  Timer? _autosaveTimer;
+  static const _autosaveDelay = Duration(milliseconds: 800);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autosaveTimer?.cancel();
     _saveTextIfDirty();
     _textController.dispose();
     _todoInputController.dispose();
     _textFocus.dispose();
     _todoInputFocus.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Flush pending text when the app goes to background — the OS may kill
+    // us from there without ever calling dispose().
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _autosaveTimer?.cancel();
+      _saveTextIfDirty();
+    }
   }
 
   Future<void> _loadData() async {
@@ -250,6 +268,9 @@ class _DocumentScreenState extends State<DocumentScreen> {
               style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
               onChanged: (_) {
                 _textDirty = true;
+                _autosaveTimer?.cancel();
+                _autosaveTimer =
+                    Timer(_autosaveDelay, _saveTextIfDirty);
               },
               onEditingComplete: _saveTextIfDirty,
             ),
