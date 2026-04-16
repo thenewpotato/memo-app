@@ -117,4 +117,3 @@ coverage/
 *.env
 credentials.json
 .r2.env
-assets/logo_candidates/
